@@ -582,16 +582,21 @@ class SingleTileVarlenScheduler:
                 seqlen = params.mSeqUsedQ[batch_idx]
         else:
             assert params.mCuSeqlensQ is not None
-            cur_cu_seqlen = Int32(0)
+            cur_cu_seqlen = params.mCuSeqlensQ.element_type(0)
             if batch_idx <= params.num_batch:
                 cur_cu_seqlen = params.mCuSeqlensQ[batch_idx]
             next_cu_seqlen = cute.arch.shuffle_sync_down(cur_cu_seqlen, offset=1)
             seqlen = next_cu_seqlen - cur_cu_seqlen
+            # Guard against underflow from invalid lanes
+            # For batch_idx == num_batch, we're reading the last cumulative seqlen
+            # which should give seqlen = 0 since there's no next sequence
+            if batch_idx >= params.num_batch:
+                seqlen = Int32(0)
         if cutlass.const_expr(params.qhead_per_kvhead_packgqa > 1):
             seqlen *= params.qhead_per_kvhead_packgqa
         return (
             cute.ceil_div(seqlen, params.tile_shape_mn[0])
-            if batch_idx < params.num_batch and lane < cute.arch.WARP_SIZE - 1
+            if batch_idx < params.num_batch
             else Int32(0)
         )
 
@@ -602,10 +607,10 @@ class SingleTileVarlenScheduler:
         num_m_blocks = self._get_num_m_blocks(lane_idx, bidb_start=0)
         num_m_blocks_cumulative = utils.warp_prefix_sum(num_m_blocks, lane_idx)
         # Total number of blocks for the next 31 batches
-        m_blocks_in_group = cute.arch.shuffle_sync(num_m_blocks_cumulative, cute.arch.WARP_SIZE - 1)
+        # Broadcast lane 0's cumulative sum to all lanes (lane 0 has the complete sum)
+        m_blocks_in_group = cute.arch.shuffle_sync(num_m_blocks_cumulative, 0)
         # Same for all lanes
         group_end_tile = m_blocks_in_group * params.num_head
-        # if cute.arch.thread_idx()[0] == 128 + 31: cute.printf("SingleTileVarlenScheduler: tile_idx=%d, group_end_tile = %d, num_m_blocks=%d, num_m_blocks_cumulative = %d, m_blocks_in_group = %d", self._tile_idx, group_end_tile, num_m_blocks, num_m_blocks_cumulative, m_blocks_in_group)
         block, head_idx, batch_idx = Int32(0), Int32(0), Int32(0)
         next_tile_idx = self._tile_idx
         while group_end_tile <= next_tile_idx:
@@ -616,9 +621,8 @@ class SingleTileVarlenScheduler:
             else:
                 num_m_blocks = self._get_num_m_blocks(lane_idx, bidb_start=batch_idx)
                 num_m_blocks_cumulative = utils.warp_prefix_sum(num_m_blocks, lane_idx)
-                m_blocks_in_group = cute.arch.shuffle_sync(
-                    num_m_blocks_cumulative, cute.arch.WARP_SIZE - 1
-                )
+                # Broadcast lane 0's cumulative sum to all lanes
+                m_blocks_in_group = cute.arch.shuffle_sync(num_m_blocks_cumulative, 0)
                 group_end_tile += m_blocks_in_group * params.num_head
         is_valid = False
         if batch_idx >= params.num_batch:

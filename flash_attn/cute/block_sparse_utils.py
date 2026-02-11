@@ -14,6 +14,7 @@ from cutlass import Float32, Int32, const_expr
 
 # Import data structures from block_sparsity
 from flash_attn.cute.block_sparsity import BlockSparseTensors
+from flash_attn.cute import utils
 from flash_attn.cute import copy_utils
 from flash_attn.cute.named_barrier import NamedBarrierBwd
 from flash_attn.cute.seqlen_info import SeqlenInfoQK
@@ -1295,6 +1296,8 @@ def consume_block_sparse_mma_bwd_sm90(
     is_causal: cutlass.Constexpr,
     is_local: cutlass.Constexpr,
     thr_mma_SdP,
+    softmax_scale,
+    seqlen,
     score_mod_fn=None,
     score_mod_bwd_fn=None,
     subtile_factor: cutlass.Constexpr = 1,
@@ -1363,6 +1366,14 @@ def consume_block_sparse_mma_bwd_sm90(
                 score_mod_fn=score_mod_fn,
                 score_mod_bwd_fn=score_mod_bwd_fn,
                 dKV_accumulate=dKV_accumulate,
+                thr_mma_SdP=thr_mma_SdP,
+                batch_idx=batch_idx,
+                head_idx=head_idx,
+                n_block=n_block,
+                softmax_scale=softmax_scale,
+                seqlen=seqlen,
+                aux_tensors=aux_tensors,
+                fastdiv_mods=fastdiv_mods,
             )
             dKV_accumulate = True
 
@@ -1381,6 +1392,14 @@ def consume_block_sparse_mma_bwd_sm90(
                     score_mod_fn=score_mod_fn,
                     score_mod_bwd_fn=score_mod_bwd_fn,
                     dKV_accumulate=dKV_accumulate,
+                    thr_mma_SdP=thr_mma_SdP,
+                    batch_idx=batch_idx,
+                    head_idx=head_idx,
+                    n_block=n_block,
+                    softmax_scale=softmax_scale,
+                    seqlen=seqlen,
+                    aux_tensors=aux_tensors,
+                    fastdiv_mods=fastdiv_mods,
                 )
                 dKV_accumulate = True
 

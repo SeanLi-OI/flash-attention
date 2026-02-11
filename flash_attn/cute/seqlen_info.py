@@ -61,8 +61,8 @@ class SeqlenInfoQK:
         tile_m: cutlass.Constexpr[cutlass.Int32] = 128,
         tile_n: cutlass.Constexpr[cutlass.Int32] = 128,
     ):
-        offset_q = 0 if const_expr(mCuSeqlensQ is None) else mCuSeqlensQ[batch_idx]
-        offset_k = 0 if const_expr(mCuSeqlensK is None) else mCuSeqlensK[batch_idx]
+        offset_q = 0 if const_expr(mCuSeqlensQ is None) else cutlass.Int32(mCuSeqlensQ[batch_idx])
+        offset_k = 0 if const_expr(mCuSeqlensK is None) else cutlass.Int32(mCuSeqlensK[batch_idx])
         padded_offset_q = (
             0
             if const_expr(mCuSeqlensQ is None)
@@ -79,7 +79,7 @@ class SeqlenInfoQK:
             seqlen_q = (
                 seqlen_q_static
                 if const_expr(mCuSeqlensQ is None)
-                else mCuSeqlensQ[batch_idx + 1] - offset_q
+                else cutlass.Int32(cutlass.Int32(mCuSeqlensQ[batch_idx + 1]) - cutlass.Int32(offset_q))
             )
         if const_expr(mSeqUsedK is not None):
             seqlen_k = mSeqUsedK[batch_idx]
@@ -87,7 +87,7 @@ class SeqlenInfoQK:
             seqlen_k = (
                 seqlen_k_static
                 if const_expr(mCuSeqlensK is None)
-                else mCuSeqlensK[batch_idx + 1] - offset_k
+                else cutlass.Int32(cutlass.Int32(mCuSeqlensK[batch_idx + 1]) - cutlass.Int32(offset_k))
             )
         block_offset = 0 if const_expr(mCuTotalMBlocks is None) else mCuTotalMBlocks[batch_idx]
         has_cu_seqlens_q: int = mCuSeqlensQ is not None
